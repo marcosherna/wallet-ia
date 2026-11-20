@@ -41,6 +41,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setIsSyncing(true);
     try {
       const data = await databaseService.loadAllFinanceData(userId);
+
       setAccounts(data.accounts);
       setTransactions(data.transactions);
       setGoals(data.goals);

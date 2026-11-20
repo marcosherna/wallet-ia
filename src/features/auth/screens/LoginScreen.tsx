@@ -210,7 +210,7 @@ export default function LoginScreen({ navigation }: Props) {
           {mode === "register" && (
             <Input
               label="Nombre completo"
-              placeholder="Ej. Carlos Mendoza"
+              placeholder="Ej. Marcos Ramos"
               value={fullName}
               onChangeText={setFullName}
               autoCapitalize="words"

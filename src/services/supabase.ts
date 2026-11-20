@@ -11,7 +11,7 @@ export const SUPABASE_URL: string =
   process.env.EXPO_PUBLIC_SUPABASE_URL || "https://tu-proyecto.supabase.co";
 
 export const SUPABASE_ANON_KEY: string =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "tu-anon-key-aqui";
+  process.env.EXPO_PUBLIC_SUPABASE_KEY || "tu-anon-key-aqui";
 
 /**
  * Comprueba si el proyecto tiene credenciales reales de Supabase configuradas
