@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import BottomSheet, { BottomSheetView } from "@expo/ui/community/bottom-sheet";
+import { StyleSheet, Text, View } from "react-native";
 import { CategoryId, TxType } from "../../core/types/Finance";
 import { useFinance } from "../../core/hooks/useFinance";
-import { BottomSheet, Button, Input, SegmentedControl } from "../ui";
+import { Button, Input, SegmentedControl } from "../ui";
 import { sanitizeAmount } from "../../core/utils/Format";
 import { CategoryPicker } from "../CategoryPicker";
 import { AccountPicker } from "../AccountPicker";
@@ -23,6 +25,7 @@ export function TransactionFormSheet({
   initialType = "expense",
   onClose,
 }: Props) {
+  const bottomSheetRef = useRef<BottomSheet>(null);
   const { accounts, addTransaction } = useFinance();
 
   const [type, setType] = useState<TxType>(initialType);
@@ -34,17 +37,22 @@ export function TransactionFormSheet({
   const [tags, setTags] = useState("");
   const [error, setError] = useState("");
 
+  // Controlar la visibilidad de la hoja mediante la ref
   useEffect(() => {
-    if (!visible) return;
-    setType(initialType);
-    setAmount("");
-    setNote("");
-    setTags("");
-    setError("");
-    setCategoryId("food");
-    setAccountId(accounts[0]?.id ?? "");
-    setToAccountId(accounts[1]?.id ?? "");
-  }, [visible, initialType]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (visible) {
+      bottomSheetRef.current?.expand();
+      setType(initialType);
+      setAmount("");
+      setNote("");
+      setTags("");
+      setError("");
+      setCategoryId("food");
+      setAccountId(accounts[0]?.id ?? "");
+      setToAccountId(accounts[1]?.id ?? "");
+    } else {
+      bottomSheetRef.current?.close();
+    }
+  }, [visible, initialType, accounts]);
 
   const submit = () => {
     const value = Number(amount);
@@ -81,66 +89,91 @@ export function TransactionFormSheet({
         : "Nuevo gasto";
 
   return (
-    <BottomSheet visible={visible} title={title} onClose={onClose}>
-      <SegmentedControl
-        options={TYPE_OPTIONS}
-        value={type}
-        onChange={setType}
-      />
+    <BottomSheet
+      ref={bottomSheetRef}
+      index={visible ? 0 : -1}
+      enablePanDownToClose
+      onClose={onClose}
+    >
+      <BottomSheetView style={styles.contentContainer}>
+        {title && <Text style={styles.title}>{title}</Text>}
 
-      <Input
-        label="Monto"
-        prefix="$"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        value={amount}
-        onChangeText={(t) => {
-          setAmount(sanitizeAmount(t));
-          setError("");
-        }}
-        error={error}
-        containerStyle={{ marginVertical: 0 }}
-      />
-
-      {type === "expense" && (
-        <CategoryPicker value={categoryId} onChange={setCategoryId} />
-      )}
-
-      <AccountPicker
-        label={type === "income" ? "Cuenta de destino" : "Cuenta de origen"}
-        value={accountId}
-        onChange={(id) => {
-          setAccountId(id);
-          if (id === toAccountId)
-            setToAccountId(accounts.find((a) => a.id !== id)?.id ?? "");
-        }}
-      />
-      {type === "transfer" && (
-        <AccountPicker
-          label="Cuenta de destino"
-          value={toAccountId}
-          onChange={setToAccountId}
-          excludeId={accountId}
+        <SegmentedControl
+          options={TYPE_OPTIONS}
+          value={type}
+          onChange={setType}
         />
-      )}
 
-      <Input
-        label="Nota (opcional)"
-        placeholder="Ej. Supermercado"
-        value={note}
-        onChangeText={setNote}
-        containerStyle={{ marginVertical: 0 }}
-      />
-      <Input
-        label="Etiquetas (opcional)"
-        placeholder="Separadas por coma: viaje, trabajo"
-        autoCapitalize="none"
-        value={tags}
-        onChangeText={setTags}
-        containerStyle={{ marginVertical: 0 }}
-      />
+        <Input
+          label="Monto"
+          prefix="$"
+          placeholder="0.00"
+          keyboardType="decimal-pad"
+          value={amount}
+          onChangeText={(t) => {
+            setAmount(sanitizeAmount(t));
+            setError("");
+          }}
+          error={error}
+          containerStyle={{ marginVertical: 0 }}
+        />
 
-      <Button title="Guardar" size="lg" fullWidth onPress={submit} />
+        {type === "expense" && (
+          <CategoryPicker value={categoryId} onChange={setCategoryId} />
+        )}
+
+        <AccountPicker
+          label={type === "income" ? "Cuenta de destino" : "Cuenta de origen"}
+          value={accountId}
+          onChange={(id) => {
+            setAccountId(id);
+            if (id === toAccountId)
+              setToAccountId(accounts.find((a) => a.id !== id)?.id ?? "");
+          }}
+        />
+
+        {type === "transfer" && (
+          <AccountPicker
+            label="Cuenta de destino"
+            value={toAccountId}
+            onChange={setToAccountId}
+            excludeId={accountId}
+          />
+        )}
+
+        <Input
+          label="Nota (opcional)"
+          placeholder="Ej. Supermercado"
+          value={note}
+          onChangeText={setNote}
+          containerStyle={{ marginVertical: 0 }}
+        />
+
+        <Input
+          label="Etiquetas (opcional)"
+          placeholder="Separadas por coma: viaje, trabajo"
+          autoCapitalize="none"
+          value={tags}
+          onChangeText={setTags}
+          containerStyle={{ marginVertical: 0 }}
+        />
+
+        <Button title="Guardar" size="lg" fullWidth onPress={submit} />
+      </BottomSheetView>
     </BottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+});

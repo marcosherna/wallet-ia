@@ -6,8 +6,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 
 import RootNavigator from "./src/navigations/RootNavigator";
-
 import { ThemeProvider } from "./src/core/providers/ThemeProvider";
+import { AuthProvider } from "./src/core/providers/AuthProvider";
 import { FinanceProvider } from "./src/core/providers/FinanceProvider";
 
 export default function App() {
@@ -16,11 +16,13 @@ export default function App() {
       <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
         <ThemeProvider>
           <SafeAreaProvider>
-            <FinanceProvider>
-              <NavigationContainer>
-                <RootNavigator />
-              </NavigationContainer>
-            </FinanceProvider>
+            <AuthProvider>
+              <FinanceProvider>
+                <NavigationContainer>
+                  <RootNavigator />
+                </NavigationContainer>
+              </FinanceProvider>
+            </AuthProvider>
           </SafeAreaProvider>
         </ThemeProvider>
       </KeyboardProvider>

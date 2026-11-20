@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Función auxiliar para verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Función auxiliar para verificar si el usuario es el dueño del documento
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Colección de Perfiles de usuario (profiles/{userId})
+    match /profiles/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 2. Colección de Cuentas (accounts/{accountId})
+    match /accounts/{accountId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null ? request.resource.data.userId == request.auth.uid : resource.data.userId == request.auth.uid
+      );
+    }
+
+    // 3. Colección de Transacciones (transactions/{txId})
+    match /transactions/{txId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null ? request.resource.data.userId == request.auth.uid : resource.data.userId == request.auth.uid
+      );
+    }
+
+    // 4. Colección de Metas de ahorro (goals/{goalId})
+    match /goals/{goalId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null ? request.resource.data.userId == request.auth.uid : resource.data.userId == request.auth.uid
+      );
+    }
+
+    // 5. Colección de Presupuestos (budgets/{budgetId})
+    match /budgets/{budgetId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null ? request.resource.data.userId == request.auth.uid : resource.data.userId == request.auth.uid
+      );
+    }
+
+    // 6. Colección de Préstamos / Créditos (loans/{loanId})
+    match /loans/{loanId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null ? request.resource.data.userId == request.auth.uid : resource.data.userId == request.auth.uid
+      );
+    }
+
+    // 7. Colección de Mensajes de Chat Asesor IA (chat_messages/{messageId})
+    match /chat_messages/{messageId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null ? request.resource.data.userId == request.auth.uid : resource.data.userId == request.auth.uid
+      );
+    }
+  }
+}

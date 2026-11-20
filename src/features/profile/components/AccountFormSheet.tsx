@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from "react";
-import { View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import BottomSheet, { BottomSheetView } from "@expo/ui/community/bottom-sheet";
 
 import { useTheme } from "../../../core/hooks/useTheme";
-import { BottomSheet, Button, Chip, Input } from "../../../components/ui";
+import { Button, Chip, Input, Label } from "../../../components/ui";
 import { useFinance } from "../../../core/hooks/useFinance";
 import { AccountType } from "../../../core/types/Finance";
 import { FieldLabel } from "../../../components/FieldLabel";
 import { ACCOUNT_TYPES } from "../../../core/constants/Categories";
 import { sanitizeAmount } from "../../../core/utils/Format";
+
 export function AccountFormSheet({
   visible,
   onClose,
@@ -15,6 +17,7 @@ export function AccountFormSheet({
   visible: boolean;
   onClose: () => void;
 }) {
+  const bottomSheetRef = useRef<BottomSheet>(null);
   const { theme } = useTheme();
   const { addAccount } = useFinance();
   const [name, setName] = useState("");
@@ -25,11 +28,14 @@ export function AccountFormSheet({
 
   useEffect(() => {
     if (visible) {
+      bottomSheetRef.current?.expand();
       setName("");
       setType("checking");
       setBalance("");
       setInstitution("");
       setError("");
+    } else {
+      bottomSheetRef.current?.close();
     }
   }, [visible]);
 
@@ -45,54 +51,87 @@ export function AccountFormSheet({
   };
 
   return (
-    <BottomSheet visible={visible} title="Nueva cuenta" onClose={onClose}>
-      <View>
-        <FieldLabel>Tipo</FieldLabel>
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            gap: theme.spacing.sm,
-          }}
-        >
-          {(Object.keys(ACCOUNT_TYPES) as AccountType[]).map((t) => (
-            <Chip
-              key={t}
-              label={ACCOUNT_TYPES[t].label}
-              selected={type === t}
-              onPress={() => setType(t)}
-            />
-          ))}
+    <BottomSheet
+      ref={bottomSheetRef}
+      index={visible ? 0 : -1}
+      enablePanDownToClose
+      onClose={onClose}
+    >
+      <BottomSheetView
+        style={[
+          styles.contentContainer,
+          {
+            paddingHorizontal: theme.spacing.lg,
+            paddingBottom: theme.spacing.xl,
+            gap: theme.spacing.md,
+          },
+        ]}
+      >
+        <Label size="lg" weight="semibold" style={styles.title}>
+          Nueva cuenta
+        </Label>
+
+        <View>
+          <FieldLabel>Tipo</FieldLabel>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: theme.spacing.sm,
+            }}
+          >
+            {(Object.keys(ACCOUNT_TYPES) as AccountType[]).map((t) => (
+              <Chip
+                key={t}
+                label={ACCOUNT_TYPES[t].label}
+                selected={type === t}
+                onPress={() => setType(t)}
+              />
+            ))}
+          </View>
         </View>
-      </View>
-      <Input
-        label="Nombre"
-        placeholder="Ej. Cuenta de nómina"
-        value={name}
-        onChangeText={(t) => {
-          setName(t);
-          setError("");
-        }}
-        error={error}
-        containerStyle={{ marginVertical: 0 }}
-      />
-      <Input
-        label={type === "credit_card" ? "Deuda actual" : "Saldo actual"}
-        prefix="$"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        value={balance}
-        onChangeText={(t) => setBalance(sanitizeAmount(t))}
-        containerStyle={{ marginVertical: 0 }}
-      />
-      <Input
-        label="Institución (opcional)"
-        placeholder="Ej. Banco principal"
-        value={institution}
-        onChangeText={setInstitution}
-        containerStyle={{ marginVertical: 0 }}
-      />
-      <Button title="Guardar cuenta" size="lg" fullWidth onPress={submit} />
+
+        <Input
+          label="Nombre"
+          placeholder="Ej. Cuenta de nómina"
+          value={name}
+          onChangeText={(t) => {
+            setName(t);
+            setError("");
+          }}
+          error={error}
+          containerStyle={{ marginVertical: 0 }}
+        />
+
+        <Input
+          label={type === "credit_card" ? "Deuda actual" : "Saldo actual"}
+          prefix="$"
+          placeholder="0.00"
+          keyboardType="decimal-pad"
+          value={balance}
+          onChangeText={(t) => setBalance(sanitizeAmount(t))}
+          containerStyle={{ marginVertical: 0 }}
+        />
+
+        <Input
+          label="Institución (opcional)"
+          placeholder="Ej. Banco principal"
+          value={institution}
+          onChangeText={setInstitution}
+          containerStyle={{ marginVertical: 0 }}
+        />
+
+        <Button title="Guardar cuenta" size="lg" fullWidth onPress={submit} />
+      </BottomSheetView>
     </BottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  contentContainer: {
+    width: "100%",
+  },
+  title: {
+    textAlign: "center",
+  },
+});

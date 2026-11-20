@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { useTheme } from "../../core/hooks/useTheme";
 import { useStatusColors, withAlpha } from "../../core/theme/Status";
 import type { IconComponent, Tone } from "./types";
+export type { Tone };
 
 export function useToneColor(tone: Tone): string {
   const { theme } = useTheme();

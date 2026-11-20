@@ -29,15 +29,12 @@ import { useFinance } from "../../../core/hooks/useFinance";
 export default function HomeScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
-  const { insights, transactions } = useFinance();
+  const { insights, transactions, isRefreshing, refresh } = useFinance();
 
   const [formType, setFormType] = useState<TxType | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // TODO: reemplazar por la recarga real de datos
   const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 700);
+    refresh();
   };
 
   const recent = [...transactions]
@@ -48,7 +45,7 @@ export default function HomeScreen() {
     <ScreenContainer
       title="Inicio"
       subtitle={monthTitle()}
-      refreshing={refreshing}
+      refreshing={isRefreshing}
       onRefresh={onRefresh}
     >
       <NetWorthCard />

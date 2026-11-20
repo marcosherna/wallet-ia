@@ -1,6 +1,6 @@
 import React from "react";
-import { View } from "react-native";
-import { Plus } from "lucide-react-native";
+import { View, TouchableOpacity, Alert } from "react-native";
+import { Plus, Trash2 } from "lucide-react-native";
 
 import { useTheme } from "../../../core/hooks/useTheme";
 import {
@@ -13,21 +13,48 @@ import {
 import { useStatusColors } from "../../../core/theme/Status";
 import { useFinance } from "../../../core/hooks/useFinance";
 import { ACCOUNT_TYPES } from "../../../core/constants/Categories";
+import { Account } from "../../../core/types/Finance";
 
-export function AccountList({ onAdd }: { onAdd: () => void }) {
+interface Props {
+  onAdd: () => void;
+  onDelete?: (account: Account) => void;
+}
+
+export function AccountList({ onAdd, onDelete }: Props) {
   const { theme } = useTheme();
   const { danger } = useStatusColors();
-  const { accounts, money } = useFinance();
+  const { accounts, money, deleteAccount } = useFinance();
+
+  const handleConfirmDelete = (a: Account) => {
+    if (onDelete) {
+      onDelete(a);
+      return;
+    }
+    Alert.alert(
+      "Eliminar cuenta",
+      `¿Estás seguro de que deseas eliminar la cuenta "${a.name}"?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => deleteAccount(a.id),
+        },
+      ],
+    );
+  };
 
   return (
     <Card padded={false}>
       {accounts.map((a, i) => {
-        const meta = ACCOUNT_TYPES[a.type];
+        const meta = ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.checking;
         const isCard = a.type === "credit_card";
         return (
           <View key={a.id}>
             {i > 0 && <Divider />}
-            <View
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onLongPress={() => handleConfirmDelete(a)}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -62,7 +89,7 @@ export function AccountList({ onAdd }: { onAdd: () => void }) {
                   </Label>
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         );
       })}

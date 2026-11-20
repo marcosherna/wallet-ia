@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View } from "react-native";
+import { View, Alert } from "react-native";
 import { Plus, Target, Gauge } from "lucide-react-native";
 
 import { useTheme } from "../../../core/hooks/useTheme";
@@ -26,7 +26,8 @@ type Tab = "goals" | "budgets";
 
 export default function BudgetsScreen() {
   const { theme } = useTheme();
-  const { goals, budgets, money } = useFinance();
+  const { goals, budgets, money, isRefreshing, refresh, deleteGoal } =
+    useFinance();
 
   const [tab, setTab] = useState<Tab>("goals");
   const [goalFormOpen, setGoalFormOpen] = useState(false);
@@ -44,10 +45,27 @@ export default function BudgetsScreen() {
     setBudgetFormOpen(true);
   };
 
+  const handleDeleteGoal = (goal: Goal) => {
+    Alert.alert(
+      "Eliminar meta",
+      `¿Deseas eliminar la meta "${goal.name}"? Los fondos acumulados no se perderán de tus cuentas.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => deleteGoal(goal.id),
+        },
+      ],
+    );
+  };
+
   return (
     <ScreenContainer
       title="Metas"
       subtitle="Convierte tus planes en un ahorro realista"
+      refreshing={isRefreshing}
+      onRefresh={refresh}
       headerRight={
         <Button
           title="Nueva"
@@ -94,7 +112,12 @@ export default function BudgetsScreen() {
           ) : (
             <View style={{ gap: theme.spacing.md }}>
               {goals.map((g) => (
-                <GoalCard key={g.id} goal={g} onContribute={setContributing} />
+                <GoalCard
+                  key={g.id}
+                  goal={g}
+                  onContribute={setContributing}
+                  onDelete={handleDeleteGoal}
+                />
               ))}
             </View>
           )}

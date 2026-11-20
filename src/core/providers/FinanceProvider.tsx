@@ -1,4 +1,4 @@
-import { createContext, useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Account,
   CategoryBudget,
@@ -17,12 +17,13 @@ import {
 } from "../utils/Finance";
 import { Ctx, FinanceValue, uid } from "../contexts/FinanceContext";
 import { formatMoney, MoneyOptions } from "../utils/Format";
+import { databaseService } from "../../services/databaseService";
+import { useAuth } from "../hooks/useAuth";
 
-/**
- * Estado global de la app con datos de ejemplo.
- * Sustituye `seed` por tu API / base local cuando la tengas.
- */
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id || "demo-user";
+
   const [accounts, setAccounts] = useState<Account[]>(seed.accounts);
   const [transactions, setTransactions] = useState<Transaction[]>(
     seed.transactions,
@@ -32,24 +33,85 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [loans, setLoans] = useState<Loan[]>(seed.loans);
   const [preferences, setPrefs] = useState<Preferences>(seed.preferences);
 
-  const addTransaction = useCallback((t: Omit<Transaction, "id">) => {
-    const full: Transaction = { ...t, id: uid() };
-    setTransactions((p) => [full, ...p]);
-    setAccounts((p) =>
-      p.map((a) => ({ ...a, balance: a.balance + balanceDelta(a, full) })),
-    );
-  }, []);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Cargar datos del usuario al cambiar de sesión o iniciar
+  const loadUserData = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const data = await databaseService.loadAllFinanceData(userId);
+      setAccounts(data.accounts);
+      setTransactions(data.transactions);
+      setGoals(data.goals);
+      setBudgets(data.budgets);
+      setLoans(data.loans);
+      setPrefs(data.preferences);
+    } catch (e) {
+      console.warn("Error loading user data in FinanceProvider:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
+
+  // Recarga manual para Pull-To-Refresh
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadUserData();
+    setIsRefreshing(false);
+  }, [loadUserData]);
+
+  // ==========================================
+  // ACCIONES TRANSACCIONES
+  // ==========================================
+
+  const addTransaction = useCallback(
+    (t: Omit<Transaction, "id">) => {
+      const full: Transaction = { ...t, id: uid() };
+
+      // Actualización optimista de transacciones y saldo de cuentas
+      setTransactions((p) => [full, ...p]);
+      setAccounts((p) =>
+        p.map((a) => {
+          const delta = balanceDelta(a, full);
+          const newBal = a.balance + delta;
+          if (delta !== 0) {
+            databaseService.updateAccountBalance(userId, a.id, newBal);
+          }
+          return { ...a, balance: newBal };
+        }),
+      );
+
+      // Persistir transacción en base de datos
+      databaseService.addTransaction(userId, full);
+    },
+    [userId],
+  );
 
   const deleteTransaction = useCallback(
     (id: string) => {
       const t = transactions.find((x) => x.id === id);
       if (!t) return;
+
       setTransactions((p) => p.filter((x) => x.id !== id));
       setAccounts((p) =>
-        p.map((a) => ({ ...a, balance: a.balance - balanceDelta(a, t) })),
+        p.map((a) => {
+          const delta = balanceDelta(a, t);
+          const newBal = a.balance - delta;
+          if (delta !== 0) {
+            databaseService.updateAccountBalance(userId, a.id, newBal);
+          }
+          return { ...a, balance: newBal };
+        }),
       );
+
+      databaseService.deleteTransaction(userId, id);
     },
-    [transactions],
+    [transactions, userId],
   );
 
   const updateTransaction = useCallback<FinanceValue["updateTransaction"]>(
@@ -57,61 +119,167 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setTransactions((p) =>
         p.map((t) => (t.id === id ? { ...t, ...patch } : t)),
       );
+      databaseService.updateTransaction(userId, id, patch);
     },
-    [],
+    [userId],
   );
 
+  // ==========================================
+  // ACCIONES CUENTAS
+  // ==========================================
+
   const addAccount = useCallback(
-    (a: Omit<Account, "id">) => setAccounts((p) => [...p, { ...a, id: uid() }]),
-    [],
+    (a: Omit<Account, "id">) => {
+      const full: Account = { ...a, id: uid() };
+      setAccounts((p) => [...p, full]);
+      databaseService.addAccount(userId, full);
+    },
+    [userId],
   );
+
+  const deleteAccount = useCallback(
+    (id: string) => {
+      setAccounts((p) => p.filter((a) => a.id !== id));
+      databaseService.deleteAccount(userId, id);
+    },
+    [userId],
+  );
+
+  // ==========================================
+  // ACCIONES METAS
+  // ==========================================
+
   const addGoal = useCallback<FinanceValue["addGoal"]>(
-    (g) => setGoals((p) => [...p, { saved: 0, ...g, id: uid() }]),
-    [],
+    (g) => {
+      const full: Goal = { saved: 0, ...g, id: uid() };
+      setGoals((p) => [...p, full]);
+      databaseService.addGoal(userId, full);
+    },
+    [userId],
   );
-  const contributeToGoal = useCallback((id: string, amount: number) => {
-    setGoals((p) =>
-      p.map((g) =>
-        g.id === id ? { ...g, saved: Math.min(g.saved + amount, g.target) } : g,
-      ),
-    );
-  }, []);
+
+  const contributeToGoal = useCallback(
+    (id: string, amount: number) => {
+      setGoals((p) =>
+        p.map((g) => {
+          if (g.id === id) {
+            const newSaved = Math.min(g.saved + amount, g.target);
+            databaseService.updateGoalSaved(userId, id, newSaved);
+            return { ...g, saved: newSaved };
+          }
+          return g;
+        }),
+      );
+    },
+    [userId],
+  );
+
+  const updateGoal = useCallback(
+    (id: string, patch: Partial<Goal>) => {
+      setGoals((p) => p.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+      databaseService.updateGoal(userId, id, patch);
+    },
+    [userId],
+  );
+
+  const deleteGoal = useCallback(
+    (id: string) => {
+      setGoals((p) => p.filter((g) => g.id !== id));
+      databaseService.deleteGoal(userId, id);
+    },
+    [userId],
+  );
+
+  // ==========================================
+  // ACCIONES PRESUPUESTOS
+  // ==========================================
 
   const saveBudget = useCallback<FinanceValue["saveBudget"]>(
     (categoryId, limit) => {
-      setBudgets((p) =>
-        p.some((b) => b.categoryId === categoryId)
-          ? p.map((b) => (b.categoryId === categoryId ? { ...b, limit } : b))
-          : [...p, { id: uid(), categoryId, limit }],
-      );
+      let budgetId = uid();
+      setBudgets((p) => {
+        const existing = p.find((b) => b.categoryId === categoryId);
+        if (existing) {
+          budgetId = existing.id;
+          return p.map((b) =>
+            b.categoryId === categoryId ? { ...b, limit } : b,
+          );
+        }
+        return [...p, { id: budgetId, categoryId, limit }];
+      });
+
+      databaseService.saveBudget(userId, {
+        id: budgetId,
+        categoryId,
+        limit,
+      });
     },
-    [],
+    [userId],
   );
+
   const removeBudget = useCallback(
-    (id: string) => setBudgets((p) => p.filter((b) => b.id !== id)),
-    [],
+    (id: string) => {
+      setBudgets((p) => p.filter((b) => b.id !== id));
+      databaseService.deleteBudget(userId, id);
+    },
+    [userId],
   );
+
+  // ==========================================
+  // ACCIONES PRÉSTAMOS
+  // ==========================================
 
   const addLoan = useCallback(
-    (l: Omit<Loan, "id">) => setLoans((p) => [...p, { ...l, id: uid() }]),
-    [],
+    (l: Omit<Loan, "id">) => {
+      const full: Loan = { ...l, id: uid() };
+      setLoans((p) => [...p, full]);
+      databaseService.addLoan(userId, full);
+    },
+    [userId],
   );
-  const payInstallment = useCallback((id: string) => {
-    setLoans((p) =>
-      p.map((l) =>
-        l.id === id
-          ? {
-              ...l,
-              paidInstallments: Math.min(l.paidInstallments + 1, l.termMonths),
-            }
-          : l,
-      ),
-    );
-  }, []);
+
+  const payInstallment = useCallback(
+    (id: string) => {
+      setLoans((p) =>
+        p.map((l) => {
+          if (l.id === id) {
+            const nextPaid = Math.min(l.paidInstallments + 1, l.termMonths);
+            databaseService.updateLoanPaidInstallments(userId, id, nextPaid);
+            return { ...l, paidInstallments: nextPaid };
+          }
+          return l;
+        }),
+      );
+    },
+    [userId],
+  );
+
+  const updateLoan = useCallback(
+    (id: string, patch: Partial<Loan>) => {
+      setLoans((p) => p.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+      databaseService.updateLoan(userId, id, patch);
+    },
+    [userId],
+  );
+
+  const deleteLoan = useCallback(
+    (id: string) => {
+      setLoans((p) => p.filter((l) => l.id !== id));
+      databaseService.deleteLoan(userId, id);
+    },
+    [userId],
+  );
+
+  // ==========================================
+  // PREFERENCIAS Y FORMATO
+  // ==========================================
 
   const setPreferences = useCallback(
-    (patch: Partial<Preferences>) => setPrefs((p) => ({ ...p, ...patch })),
-    [],
+    (patch: Partial<Preferences>) => {
+      setPrefs((p) => ({ ...p, ...patch }));
+      databaseService.updatePreferences(userId, patch);
+    },
+    [userId],
   );
 
   const money = useCallback(
@@ -120,6 +288,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     [preferences.currency],
   );
 
+  // ==========================================
+  // VALORES DERIVADOS
+  // ==========================================
   const derived = useMemo(() => {
     const assets = accounts
       .filter((a) => a.type !== "credit_card")
@@ -184,16 +355,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     ...derived,
     insights,
     money,
+    isRefreshing,
+    isSyncing,
+    refresh,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     addAccount,
+    deleteAccount,
     addGoal,
     contributeToGoal,
+    updateGoal,
+    deleteGoal,
     saveBudget,
     removeBudget,
     addLoan,
     payInstallment,
+    updateLoan,
+    deleteLoan,
     setPreferences,
   };
 

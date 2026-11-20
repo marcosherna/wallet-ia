@@ -33,7 +33,7 @@ const dayKey = (iso: string) => {
 
 export default function TransactionsScreen() {
   const { theme } = useTheme();
-  const { transactions, accounts, money } = useFinance();
+  const { transactions, accounts, money, isRefreshing, refresh } = useFinance();
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selected, setSelected] = useState<Transaction | null>(null);
@@ -83,6 +83,8 @@ export default function TransactionsScreen() {
       <SectionList
         sections={sections}
         keyExtractor={(t) => t.id}
+        refreshing={isRefreshing}
+        onRefresh={refresh}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}

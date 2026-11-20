@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView } from "react-native";
-import { View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View, Alert } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,6 +8,8 @@ import { useTheme } from "../../../core/hooks/useTheme";
 import { useStyles } from "../../../core/hooks/useStyles";
 import { Button } from "../../../components/ui";
 import { FinancialProfile, TOTAL_STEPS } from "../onboarding.data";
+import { useAuth } from "../../../core/hooks/useAuth";
+import { useFinance } from "../../../core/hooks/useFinance";
 
 import {
   JobStep,
@@ -23,6 +24,8 @@ type Props = NativeStackScreenProps<RootStackParamList, "Onboarding">;
 export default function OnboardingScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const { completeOnboarding } = useAuth();
+  const { addGoal, accounts } = useFinance();
 
   const styles = useStyles((theme) => ({
     root: {
@@ -49,6 +52,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   }));
 
   const [currentStep, setCurrentStep] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<FinancialProfile>({
     jobStatus: "",
     monthlyIncome: "",
@@ -70,7 +74,7 @@ export default function OnboardingScreen({ navigation }: Props) {
     }
   })();
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!isStepValid) return;
 
     if (!isLastStep) {
@@ -78,11 +82,56 @@ export default function OnboardingScreen({ navigation }: Props) {
       return;
     }
 
-    // TODO: persistir `profile` (store / API) antes de navegar.
-    navigation.replace("MainApp", {
-      screen: "MainTabs",
-      params: { screen: "Home" },
-    });
+    setLoading(true);
+    try {
+      // 1. Guardar perfil de onboarding en Supabase o almacén local
+      await completeOnboarding(profile);
+
+      // 2. Si el usuario definió una meta principal, sembramos una meta inicial coherente
+      const income = Number(profile.monthlyIncome) || 2000;
+      if (profile.primaryGoal === "emergency") {
+        addGoal({
+          name: "Fondo de emergencia",
+          target: income * 3,
+          saved: 0,
+          deadline: "12 meses",
+          icon: "emergency",
+          monthlyContribution: Math.round(income * 0.15),
+        });
+      } else if (profile.primaryGoal === "invest") {
+        addGoal({
+          name: "Portafolio de Inversión",
+          target: income * 5,
+          saved: 0,
+          deadline: "24 meses",
+          icon: "target",
+          monthlyContribution: Math.round(income * 0.2),
+        });
+      }
+
+      // 3. Navegar a la app principal
+      navigation.replace("MainApp", {
+        screen: "MainTabs",
+        params: { screen: "Home" },
+      });
+    } catch (err: any) {
+      Alert.alert(
+        "Aviso",
+        "Se guardó la información localmente. Puedes continuar a tu panel.",
+        [
+          {
+            text: "Continuar",
+            onPress: () =>
+              navigation.replace("MainApp", {
+                screen: "MainTabs",
+                params: { screen: "Home" },
+              }),
+          },
+        ],
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -142,11 +191,12 @@ export default function OnboardingScreen({ navigation }: Props) {
         ]}
       >
         <Button
-          title={isLastStep ? "Finalizar" : "Continuar"}
+          title={isLastStep ? "Finalizar y empezar" : "Continuar"}
           variant="primary"
           size="lg"
           fullWidth
-          disabled={!isStepValid}
+          loading={loading}
+          disabled={!isStepValid || loading}
           onPress={handleNext}
         />
       </View>
